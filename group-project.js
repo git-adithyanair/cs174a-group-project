@@ -1,7 +1,7 @@
 import {defs, tiny} from './examples/common.js';
 
 const {
-    Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene,
+    Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene, Movement_Controls
 } = tiny;
 
 export class GroupProject extends Scene {
@@ -30,15 +30,20 @@ export class GroupProject extends Scene {
 
     make_control_panel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
-        this.key_triggered_button("YEET", ["Control", "0"], () => undefined);
+        this.key_triggered_button("Tilt forward", ["w"], () => undefined);
         this.new_line();
+        this.key_triggered_button("Roll left", ["a"], () => undefined);
+        this.key_triggered_button("Tilt back", ["s"], () => undefined);
+        this.key_triggered_button("Roll right", ["d"], () => undefined);
+        this.new_line();
+        this.key_triggered_button("Thrust", [" "], () => undefined);
     }
 
     display(context, program_state) {
         // display():  Called once per frame of animation.
         // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
         if (!context.scratchpad.controls) {
-            this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
+            // this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
             // Define the global camera and projection matrices, which are stored in program_state.
             program_state.set_camera(this.initial_camera_location);
         }
