@@ -11,51 +11,127 @@ export class GroupProject extends Scene {
 
         // At the beginning of our program, load one of each of these shape definitions onto the GPU.
         this.shapes = {
-            torus: new defs.Torus(15, 15),
-            torus2: new defs.Torus(3, 15),
-            circle: new defs.Regular_2D_Polygon(1, 15),
+            jet_body: new defs.Capped_Cylinder(20, 20),
+            wing: new defs.Triangle(),
+            cockpit: new defs.Closed_Cone(20, 20),
+            cube: new defs.Cube()
         };
 
         // *** Materials
         this.materials = {
-            test: new Material(new defs.Phong_Shader(),
-                {ambient: .4, diffusivity: .6, color: hex_color("#ffffff")}),
-            test2: new Material(new Gouraud_Shader(),
-                {ambient: .4, diffusivity: .6, color: hex_color("#992828")}),
-            ring: new Material(new Ring_Shader()),
+            jet: new Material(new defs.Phong_Shader(), 
+                                  {ambient: 0.4, diffusivity: 0.6, color: hex_color('#a6a5a4')}),
+            canyon: new Material(new defs.Phong_Shader(), 
+                                  {ambient: 0.4, diffusivity: 0.6, color: hex_color('#9a7b4f')}),
         }
+        
+        this.initial_camera_location = Mat4.look_at(vec3(0, 20, -35), vec3(0, 0, 0), vec3(0, 1, 0));
 
-        this.initial_camera_location = Mat4.look_at(vec3(0, 10, 20), vec3(0, 0, 0), vec3(0, 1, 0));
+        this.base_jet_body_transformation = Mat4.scale(1, 1, 6.5);
+        this.base_left_wing_transformation = Mat4.rotation(Math.PI/2, 1, 0, 0)
+                                                 .times(Mat4.translation(1, 0, 0))
+                                                 .times(Mat4.scale(4, 2, 2));
+        this.base_right_wing_transformation = Mat4.rotation(Math.PI/2, 0, 0, 1)
+                                                  .times(Mat4.rotation(-Math.PI/2, 0, 1, 0))
+                                                  .times(Mat4.translation(0, 1, 0))
+                                                  .times(Mat4.scale(2, 4, 2));
+        this.base_rudder_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
+                                              .times(Mat4.translation(-3.25, 0.75, 0))
+                                              .times(Mat4.scale(2, 2.5, 2));
+        this.base_cockpit_transformation = Mat4.translation(0, 0, 4.25);
+
+
+        this.airplane_speed = 5;
+        this.movement_speed = 10;
+        this.pos = Mat4.identity();
+
+        this.left_tilt = false;
+
+        this.setup_complete = false;
+
     }
 
     make_control_panel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
-        this.key_triggered_button("Tilt forward", ["w"], () => undefined);
+        this.key_triggered_button("Up", ["w"], () => {
+            const new_pos = this.pos.times(Mat4.translation(0, this.movement_speed, 0));
+            this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
+        });
         this.new_line();
-        this.key_triggered_button("Roll left", ["a"], () => undefined);
-        this.key_triggered_button("Tilt back", ["s"], () => undefined);
-        this.key_triggered_button("Roll right", ["d"], () => undefined);
+        this.key_triggered_button("Left", ["a"], 
+                                    () => {
+                                        const new_pos = this.pos.times(Mat4.translation(this.movement_speed, 0, 0));
+                                        this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
+                                        // if (!this.left_tilt) {
+                                        //     this.left_tilt = true;
+                                        //     this.pos = this.pos.times(Mat4.rotation(-Math.PI/4, 0, 0, 1));
+                                        // }
+                                    }, 
+                                    // undefined, 
+                                    // () => {
+                                    //     this.left_tilt = false;
+                                    //     this.pos = this.pos.times(Mat4.rotation(Math.PI/4, 0, 0, 1));
+                                    // }
+        );
+        this.key_triggered_button("Right", ["d"], () => {
+            const new_pos = this.pos.times(Mat4.translation(-this.movement_speed, 0, 0));
+            this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
+        });
         this.new_line();
-        this.key_triggered_button("Thrust", [" "], () => undefined);
+        this.key_triggered_button("Down", ["s"], () => {
+            const new_pos = this.pos.times(Mat4.translation(0, -this.movement_speed, 0));
+            this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
+        });
+    }
+
+    move_plane_forward() {
+        const new_pos = this.pos.times(Mat4.translation(0, 0, this.airplane_speed));
+        this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.01));
     }
 
     display(context, program_state) {
         // display():  Called once per frame of animation.
         // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
-        if (!context.scratchpad.controls) {
+        if (!this.setup_complete) {
             // this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
+            
             // Define the global camera and projection matrices, which are stored in program_state.
             program_state.set_camera(this.initial_camera_location);
+            
+            // The parameters of the Light are: position, color, size
+            program_state.lights = [new Light(vec4(0, 5, 5, 1), color(1, 1, 1, 1), 100000)];
+
+            this.setup_complete = true;
         }
 
         program_state.projection_transform = Mat4.perspective(
             Math.PI / 4, context.width / context.height, .1, 1000);
 
-        // TODO:  Fill in matrix operations and drawing code to draw the solar system scene (Requirements 3 and 4)
         const t = program_state.animation_time / 1000, dt = program_state.animation_delta_time / 1000;
+
+        this.move_plane_forward();
+
+        const jet_body_transformation = Mat4.identity().times(this.pos).times(this.base_jet_body_transformation);
+        const left_wing_transformation = Mat4.identity().times(this.pos).times(this.base_left_wing_transformation)
+        const right_wing_transformation = Mat4.identity().times(this.pos).times(this.base_right_wing_transformation)
+        const rudder_transformation = Mat4.identity().times(this.pos).times(this.base_rudder_transformation)
+        const cockpit_transformation = Mat4.identity().times(this.pos).times(this.base_cockpit_transformation);
+
+        // program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
         
-        // The parameters of the Light are: position, color, size
-        program_state.lights = [new Light(vec3(0, 0, 0), color(1, 1, 1, 1), 10)];
+        this.shapes.jet_body.draw(context, program_state, jet_body_transformation, this.materials.jet);
+        this.shapes.wing.draw(context, program_state, left_wing_transformation, this.materials.jet);
+        this.shapes.wing.draw(context, program_state, right_wing_transformation, this.materials.jet);
+        this.shapes.wing.draw(context, program_state, rudder_transformation, this.materials.jet);
+        this.shapes.cockpit.draw(context, program_state, cockpit_transformation, this.materials.jet);
+
+        const left_canyon_transformation = Mat4.identity().times(Mat4.translation(20, 0, 0))
+                                                     .times(Mat4.scale(1, 10, 1000));
+        const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-20, 0, 0))
+                                                     .times(Mat4.scale(1, 10, 1000));
+
+        this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
+        this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
 
     }
 }
