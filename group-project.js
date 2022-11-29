@@ -1,7 +1,7 @@
 import {defs, tiny} from './examples/common.js';
 
 const {
-    Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene, Movement_Controls
+    Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene, Movement_Controls, Texture
 } = tiny;
 
 export class GroupProject extends Scene {
@@ -21,8 +21,13 @@ export class GroupProject extends Scene {
         this.materials = {
             jet: new Material(new defs.Phong_Shader(), 
                                   {ambient: 0.4, diffusivity: 0.6, color: hex_color('#a6a5a4')}),
-            canyon: new Material(new defs.Phong_Shader(), 
-                                  {ambient: 0.4, diffusivity: 0.6, color: hex_color('#9a7b4f')}),
+            canyon: new Material(new defs.Textured_Phong(), 
+                                  {
+                                      ambient: 1, 
+                                      // diffusivity: 1, 
+                                      // color: hex_color('#9a7b4f'), 
+                                      texture: new Texture("assets/canyon.jpeg", "LINEAR_MIPMAP_LINEAR")
+                                  }), 
         }
         
         this.initial_camera_location = Mat4.look_at(vec3(0, 20, -35), vec3(0, 0, 0), vec3(0, 1, 0));
@@ -42,46 +47,55 @@ export class GroupProject extends Scene {
 
 
         this.airplane_speed = 5;
-        this.movement_speed = 10;
         this.pos = Mat4.identity();
 
-        this.left_tilt = false;
-
-        this.setup_complete = false;
+        this.up = false;
+        this.down = false;
+        this.left = false;
+        this.right = false;
 
     }
 
     make_control_panel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
-        this.key_triggered_button("Up", ["w"], () => {
-            const new_pos = this.pos.times(Mat4.translation(0, this.movement_speed, 0));
-            this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
-        });
+        this.key_triggered_button("Up", ["w"], 
+                                  () => {
+                                      this.up = true;
+                                  },
+                                  undefined,
+                                  () => {
+                                      this.up = false;
+                                  },
+                                 );
         this.new_line();
         this.key_triggered_button("Left", ["a"], 
-                                    () => {
-                                        const new_pos = this.pos.times(Mat4.translation(this.movement_speed, 0, 0));
-                                        this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
-                                        // if (!this.left_tilt) {
-                                        //     this.left_tilt = true;
-                                        //     this.pos = this.pos.times(Mat4.rotation(-Math.PI/4, 0, 0, 1));
-                                        // }
-                                    }, 
-                                    // undefined, 
-                                    // () => {
-                                    //     this.left_tilt = false;
-                                    //     this.pos = this.pos.times(Mat4.rotation(Math.PI/4, 0, 0, 1));
-                                    // }
+                                  () => { 
+                                      this.left = true;
+                                  },
+                                  undefined,
+                                  () => { 
+                                      this.left = false;
+                                  }
         );
-        this.key_triggered_button("Right", ["d"], () => {
-            const new_pos = this.pos.times(Mat4.translation(-this.movement_speed, 0, 0));
-            this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
-        });
+        this.key_triggered_button("Right", ["d"],
+                                  () => { 
+                                      this.right = true;
+                                  },
+                                  undefined,
+                                  () => { 
+                                      this.right = false;
+                                  }
+        );
         this.new_line();
-        this.key_triggered_button("Down", ["s"], () => {
-            const new_pos = this.pos.times(Mat4.translation(0, -this.movement_speed, 0));
-            this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.1));
-        });
+        this.key_triggered_button("Down", ["s"],
+                                  () => { 
+                                      this.down = true;
+                                  },
+                                  undefined,
+                                  () => { 
+                                      this.down = false;
+                                  }
+        );
     }
 
     move_plane_forward() {
@@ -100,8 +114,6 @@ export class GroupProject extends Scene {
             
             // The parameters of the Light are: position, color, size
             program_state.lights = [new Light(vec4(0, 5, 5, 1), color(1, 1, 1, 1), 100000)];
-
-            this.setup_complete = true;
         }
 
         program_state.projection_transform = Mat4.perspective(
@@ -111,13 +123,29 @@ export class GroupProject extends Scene {
 
         this.move_plane_forward();
 
+        if (this.up) {
+            this.pos = this.pos.times(Mat4.translation(0, this.airplane_speed * dt, 0));
+        }
+
+        if (this.down) {
+            this.pos = this.pos.times(Mat4.translation(0, -this.airplane_speed * dt, 0));
+        }
+
+        if (this.left) {
+            this.pos = this.pos.times(Mat4.translation(this.airplane_speed * dt, 0, 0));
+        }
+
+        if (this.right) {
+            this.pos = this.pos.times(Mat4.translation(-this.airplane_speed * dt, 0, 0));
+        }
+
         const jet_body_transformation = Mat4.identity().times(this.pos).times(this.base_jet_body_transformation);
         const left_wing_transformation = Mat4.identity().times(this.pos).times(this.base_left_wing_transformation)
         const right_wing_transformation = Mat4.identity().times(this.pos).times(this.base_right_wing_transformation)
         const rudder_transformation = Mat4.identity().times(this.pos).times(this.base_rudder_transformation)
         const cockpit_transformation = Mat4.identity().times(this.pos).times(this.base_cockpit_transformation);
 
-        // program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
+        program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
         
         this.shapes.jet_body.draw(context, program_state, jet_body_transformation, this.materials.jet);
         this.shapes.wing.draw(context, program_state, left_wing_transformation, this.materials.jet);
