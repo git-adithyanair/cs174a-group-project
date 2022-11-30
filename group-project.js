@@ -1,24 +1,35 @@
 import {defs, tiny} from './examples/common.js';
 import {Shape_From_File} from './examples/obj-file-demo.js';
-import {Body} from './examples/collisions-demo.js'
+import {Body} from './examples/collisions-demo.js';
+
 
 const {
     Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene, Movement_Controls, Texture
 } = tiny;
+
+const {Cube, Axis_Arrows, Textured_Phong} = defs
+
 
 export class Group_Project extends Scene {
     constructor() {
         // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
         super();
 
+        //constant for Grid_Patch
+        const row_operation_2 = (s, p) => vec3(-1, 5 * s - 1, Math.random()+Math.random());
+        const column_operation_2 = (t, p, s) => vec3(1200 * t - 1, 20 * s - 1, Math.random()+Math.random());
+        
         // At the beginning of our program, load one of each of these shape definitions onto the GPU.
         this.shapes = {
             jet_body: new defs.Capped_Cylinder(20, 20),
             wing: new defs.Triangle(),
             cockpit: new defs.Closed_Cone(20, 20),
             cube: new defs.Cube(),
+            water: new defs.Cube(),
             jet: new Shape_From_File("assets/jet.obj"),
-            missile: new Shape_From_File("assets/missile.obj")
+            missile: new Shape_From_File("assets/missile.obj"),
+            canyonWall: new defs.Grid_Patch(8, 1400, row_operation_2, column_operation_2),
+            uranium: new Shape_From_File("assets/uranium.obj"),
         };
 
         // *** Materials
@@ -36,14 +47,24 @@ export class Group_Project extends Scene {
                                           texture: new Texture("assets/missile.jpg")
                                       }
                                   ),
-            canyon: new Material(new defs.Phong_Shader(), 
+            canyon: new Material(new defs.Textured_Phong(),
                                   {
-                                      ambient: 1, 
-                                      diffusivity: 1, 
-                                      color: hex_color('#9a7b4f'), 
-                                      texture: new Texture("assets/canyon.jpeg", "LINEAR_MIPMAP_LINEAR")
-                                  }), 
+                                      ambient: 1,
+                                      diffusivity: 1,
+                                      // color: hex_color('#9a7b4f'),
+                                      texture: new Texture("assets/canyon.png", "LINEAR_MIPMAP_LINEAR")
+                                  }),
+            uranium: new Material(new defs.Phong_Shader(),
+                                      {ambient: 0.4, diffusivity: 0.6, color: hex_color('#e8dd13')}),
+             water: new Material(new Texture_Scroll_X(),
+                                  {
+                                        color: hex_color("#000000"),
+                                        ambient: 1,
+                                      texture: new Texture("assets/sea-water.png", "LINEAR_MIPMAP_LINEAR")
+                                  }),
         }
+
+        
         
         this.initial_camera_location = Mat4.look_at(vec3(0, 12, -35), vec3(0, 0, 0), vec3(0, 1, 0));
 
@@ -53,6 +74,10 @@ export class Group_Project extends Scene {
 
         this.base_missile_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
                                                .times(Mat4.scale(2, 2, 2));
+
+        this.water = Mat4.identity().times(Mat4.rotation(Math.PI/2, 0, 0, 1))
+                                    .times(Mat4.translation(-14, 0, 0))
+                                    .times(Mat4.scale(1, 25, 1000));
 
         this.jet_speed = 20;
         this.pos = Mat4.identity();
@@ -69,7 +94,7 @@ export class Group_Project extends Scene {
         this.jet_hit_time = 0;
         this.jet_hit_time_delay = 0.5;
 
-        this.canyon_width = 30;
+        this.canyon_width = 24;
         this.left_canyon_collision = false;
         this.right_canyon_collision = false;
 
@@ -270,13 +295,24 @@ export class Group_Project extends Scene {
 
         program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
 
-        const left_canyon_transformation = Mat4.identity().times(Mat4.translation(this.canyon_width, 0, 0))
-                                                     .times(Mat4.scale(1, 15, 1000));
-        const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
-                                                     .times(Mat4.scale(1, 15, 1000));
 
-        this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
-        this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+        const left_canyon_texture = Mat4.identity().times(Mat4.rotation(Math.PI/2,0, 1, 0))
+                                                          .times(Mat4.translation(-1000, -11, 20))
+                                                          .times(Mat4.scale(1, 3, 3));
+        const right_canyon_texture = Mat4.identity().times(Mat4.rotation(Math.PI/2,0, 1, 0))
+                                                          .times(Mat4.translation(-1000, -11, -26))
+                                                          .times(Mat4.scale(1, 3, 3));
+        const uranium = Mat4.identity().times(Mat4.scale(2, 2, 2))
+                                       .times(Mat4.rotation(Math.PI/2, 0, 1, 0))
+                                       .times(Mat4.translation(-475, 3, 0));
+        let rotation = Math.PI*dt/60;
+        this.water = this.water.times(Mat4.rotation(rotation, 0, 1, 0));
+
+        
+        this.shapes.water.draw(context, program_state, this.water, this.materials.water);
+        this.shapes.canyonWall.draw(context, program_state, left_canyon_texture, this.materials.canyon);
+        this.shapes.canyonWall.draw(context, program_state, right_canyon_texture, this.materials.canyon);
+        this.shapes.uranium.draw(context, program_state, uranium, this.materials.uranium);
 
     }
 }
@@ -470,4 +506,42 @@ class Ring_Shader extends Shader {
         }`;
     }
 }
+
+class Texture_Scroll_X extends Textured_Phong {
+    // TODO:  Modify the shader below (right now it's just the same fragment shader as Textured_Phong) for requirement #6.
+    fragment_glsl_code() {
+        return this.shared_glsl_code() + `
+            varying vec2 f_tex_coord;
+            uniform sampler2D texture;
+            uniform float animation_time;
+
+            void main(){
+                float modAnimation = mod(animation_time, 4.0);
+                float transformation = 2.0 * modAnimation ;
+
+                vec4 transformBy = vec4(f_tex_coord.x, f_tex_coord.y, 0.0, 1.0);
+                mat4 trans = mat4(vec4(1.0, 0.0, 0.0, 0.0),
+                                        vec4(0.0, 1.0, 0.0, 0.0),
+                                        vec4(0.0, 0.0, 1.0, 0.0),
+                                        vec4(-transformation, 0.0, 0.0, 1.0)
+                                );
+
+                vec4 coordinate = trans * transformBy;
+
+                float xCoord = mod(coordinate.x, 1.0);
+                float yCoord = mod(coordinate.y, 1.0);
+
+                vec4 tex_color = texture2D( texture, coordinate.xy);
+                vec4 new_tex_color = vec4(0.0, 0.0, 0.0, 1.0);
+
+                if( tex_color.w < .01 ) discard;
+                                                                         // Compute an initial (ambient) color:
+                gl_FragColor = vec4( ( tex_color.xyz + shape_color.xyz ) * ambient, shape_color.w * tex_color.w );
+                                                                         // Compute the final color with contributions from lights:
+                gl_FragColor.xyz += phong_model_lights( normalize( N ), vertex_worldspace );
+
+        } `;
+    }
+}
+
 
