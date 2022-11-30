@@ -1,10 +1,12 @@
 import {defs, tiny} from './examples/common.js';
+import {Shape_From_File} from './examples/obj-file-demo.js';
+import {Body} from './examples/collisions-demo.js'
 
 const {
     Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene, Movement_Controls, Texture
 } = tiny;
 
-export class GroupProject extends Scene {
+export class Maverick extends Scene {
     constructor() {
         // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
         super();
@@ -14,40 +16,72 @@ export class GroupProject extends Scene {
             jet_body: new defs.Capped_Cylinder(20, 20),
             wing: new defs.Triangle(),
             cockpit: new defs.Closed_Cone(20, 20),
-            cube: new defs.Cube()
+            cube: new defs.Cube(),
+            jet: new Shape_From_File("assets/jet.obj"),
+            missile: new Shape_From_File("assets/missile.obj")
         };
+
+        this.bodies = [
+            new Body(this.shapes.jet, undefined, vec3(1, 1, 1)),
+            new Body(this.shapes.cube, undefined, vec3(1, 1, 1))
+        ]
 
         // *** Materials
         this.materials = {
             jet: new Material(new defs.Phong_Shader(), 
-                                  {ambient: 0.4, diffusivity: 0.6, color: hex_color('#a6a5a4')}),
-            canyon: new Material(new defs.Textured_Phong(), 
+                                      {
+                                          ambient: .5, diffusivity: .5, specularity: .5,
+                                          color: hex_color('#746e6b'),
+                                      }
+                                  ),
+            missile: new Material(new defs.Textured_Phong(), 
+                                      {
+                                          ambient: .5, diffusivity: .5, specularity: .5,
+                                          color: hex_color('#830001'),
+                                          texture: new Texture("assets/missile.jpg")
+                                      }
+                                  ),
+            canyon: new Material(new defs.Phong_Shader(), 
                                   {
                                       ambient: 1, 
-                                      // diffusivity: 1, 
-                                      // color: hex_color('#9a7b4f'), 
+                                      diffusivity: 1, 
+                                      color: hex_color('#9a7b4f'), 
                                       texture: new Texture("assets/canyon.jpeg", "LINEAR_MIPMAP_LINEAR")
                                   }), 
         }
         
-        this.initial_camera_location = Mat4.look_at(vec3(0, 20, -35), vec3(0, 0, 0), vec3(0, 1, 0));
+        this.initial_camera_location = Mat4.look_at(vec3(0, 12, -35), vec3(0, 0, 0), vec3(0, 1, 0));
 
-        this.base_jet_body_transformation = Mat4.scale(1, 1, 6.5);
-        this.base_left_wing_transformation = Mat4.rotation(Math.PI/2, 1, 0, 0)
-                                                 .times(Mat4.translation(1, 0, 0))
-                                                 .times(Mat4.scale(4, 2, 2));
-        this.base_right_wing_transformation = Mat4.rotation(Math.PI/2, 0, 0, 1)
-                                                  .times(Mat4.rotation(-Math.PI/2, 0, 1, 0))
-                                                  .times(Mat4.translation(0, 1, 0))
-                                                  .times(Mat4.scale(2, 4, 2));
-        this.base_rudder_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
-                                              .times(Mat4.translation(-3.25, 0.75, 0))
-                                              .times(Mat4.scale(2, 2.5, 2));
-        this.base_cockpit_transformation = Mat4.translation(0, 0, 4.25);
+        // this.base_jet_body_transformation = Mat4.scale(1, 1, 6.5);
+        // this.base_left_wing_transformation = Mat4.rotation(Math.PI/2, 1, 0, 0)
+        //                                          .times(Mat4.translation(1, 0, 0))
+        //                                          .times(Mat4.scale(4, 2, 2));
+        // this.base_right_wing_transformation = Mat4.rotation(Math.PI/2, 0, 0, 1)
+        //                                           .times(Mat4.rotation(-Math.PI/2, 0, 1, 0))
+        //                                           .times(Mat4.translation(0, 1, 0))
+        //                                           .times(Mat4.scale(2, 4, 2));
+        // this.base_rudder_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
+        //                                       .times(Mat4.translation(-3.25, 0.75, 0))
+        //                                       .times(Mat4.scale(2, 2.5, 2));
+        // this.base_cockpit_transformation = Mat4.translation(0, 0, 4.25);
 
+        this.base_jet_transformation = Mat4.scale(4, 4, 4)
+                                           .times(Mat4.rotation(-Math.PI/2, 1, 0, 0))
+                                           .times(Mat4.rotation(-Math.PI/2, 0, 0, 1));
 
-        this.airplane_speed = 5;
+        this.base_missile_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
+                                               .times(Mat4.scale(2, 2, 2));
+
+        this.jet_speed = 20;
         this.pos = Mat4.identity();
+
+        this.m_pos = Mat4.identity();
+        this.missile_speed = 80;
+        this.next_missile_time = 2;
+        this.next_missile_probability = 0.25;
+        this.missile_shown = false;
+
+        this.canyon_width = 30;
 
         this.up = false;
         this.down = false;
@@ -98,9 +132,37 @@ export class GroupProject extends Scene {
         );
     }
 
-    move_plane_forward() {
-        const new_pos = this.pos.times(Mat4.translation(0, 0, this.airplane_speed));
-        this.pos = new_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.01));
+    move_scene() {
+        const new_jet_pos = this.pos.times(Mat4.translation(0, 0, this.jet_speed));
+        this.pos = new_jet_pos.map((x, i) => Vector.from(this.pos[i]).mix(x, 0.01));
+        if (this.missile_shown) {
+            const new_missile_pos = this.m_pos.times(Mat4.translation(0, 0, -this.missile_speed));
+            this.m_pos = new_missile_pos.map((x, i) => Vector.from(this.m_pos[i]).mix(x, 0.01));
+        }
+    }
+
+    update_state() {
+        // update_state():  Override the base time-stepping code to say what this particular
+        // scene should do to its bodies every frame -- including applying forces.
+        // Generate moving bodies:
+
+        const collider = {intersect_test: Body.intersect_sphere, points: new defs.Subdivision_Sphere(1), leeway: .5};
+        // Loop through all bodies (call each "a"):
+        for (let a of this.bodies) {
+            // Cache the inverse of matrix of body "a" to save time.
+            a.inverse = Mat4.inverse(a.drawn_location);
+
+            // *** Collision process is here ***
+            // Loop through all bodies again (call each "b"):
+            for (let b of this.bodies) {
+                // Pass the two bodies and the collision shape to check_if_colliding():
+                if (!a.check_if_colliding(b, collider))
+                    continue;
+                // If we get here, we collided, so turn red and zero out the
+                // velocity so they don't inter-penetrate any further.
+                console.log("TOUCH");
+            }
+        }
     }
 
     display(context, program_state) {
@@ -114,6 +176,8 @@ export class GroupProject extends Scene {
             
             // The parameters of the Light are: position, color, size
             program_state.lights = [new Light(vec4(0, 5, 5, 1), color(1, 1, 1, 1), 100000)];
+
+            this.setup_complete = true;
         }
 
         program_state.projection_transform = Mat4.perspective(
@@ -121,45 +185,72 @@ export class GroupProject extends Scene {
 
         const t = program_state.animation_time / 1000, dt = program_state.animation_delta_time / 1000;
 
-        this.move_plane_forward();
+        this.move_scene();
 
         if (this.up) {
-            this.pos = this.pos.times(Mat4.translation(0, this.airplane_speed * dt, 0));
+            this.pos = this.pos.times(Mat4.translation(0, this.jet_speed * dt, 0));
         }
 
         if (this.down) {
-            this.pos = this.pos.times(Mat4.translation(0, -this.airplane_speed * dt, 0));
+            this.pos = this.pos.times(Mat4.translation(0, -this.jet_speed * dt, 0));
         }
 
         if (this.left) {
-            this.pos = this.pos.times(Mat4.translation(this.airplane_speed * dt, 0, 0));
+            this.pos = this.pos.times(Mat4.translation(this.jet_speed * dt, 0, 0));
         }
 
         if (this.right) {
-            this.pos = this.pos.times(Mat4.translation(-this.airplane_speed * dt, 0, 0));
+            this.pos = this.pos.times(Mat4.translation(-this.jet_speed * dt, 0, 0));
         }
 
-        const jet_body_transformation = Mat4.identity().times(this.pos).times(this.base_jet_body_transformation);
-        const left_wing_transformation = Mat4.identity().times(this.pos).times(this.base_left_wing_transformation)
-        const right_wing_transformation = Mat4.identity().times(this.pos).times(this.base_right_wing_transformation)
-        const rudder_transformation = Mat4.identity().times(this.pos).times(this.base_rudder_transformation)
-        const cockpit_transformation = Mat4.identity().times(this.pos).times(this.base_cockpit_transformation);
+        // const jet_body_transformation = Mat4.identity().times(this.pos).times(this.base_jet_body_transformation);
+        // const left_wing_transformation = Mat4.identity().times(this.pos).times(this.base_left_wing_transformation)
+        // const right_wing_transformation = Mat4.identity().times(this.pos).times(this.base_right_wing_transformation)
+        // const rudder_transformation = Mat4.identity().times(this.pos).times(this.base_rudder_transformation)
+        // const cockpit_transformation = Mat4.identity().times(this.pos).times(this.base_cockpit_transformation);
+
+        // this.shapes.jet_body.draw(context, program_state, jet_body_transformation, this.materials.jet);
+        // this.shapes.wing.draw(context, program_state, left_wing_transformation, this.materials.jet);
+        // this.shapes.wing.draw(context, program_state, right_wing_transformation, this.materials.jet);
+        // this.shapes.wing.draw(context, program_state, rudder_transformation, this.materials.jet);
+        // this.shapes.cockpit.draw(context, program_state, cockpit_transformation, this.materials.jet);
+
+        if (t > this.next_missile_time && Math.random() < this.next_missile_probability && !this.missile_shown) {
+            this.next_missile_time += 2;
+            const missile_x = Math.floor(Math.random() * 100) * (this.canyon_width / 100) * (Math.random() > 0.5 ? 1 : -1);
+            const missile_y = Math.floor(Math.random() * 100) * (this.canyon_width / 100) * (Math.random() > 0.5 ? 1 : -1);
+            this.m_pos = this.m_pos.times(Mat4.translation(missile_x, missile_y, 120));
+            const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
+            this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
+            this.missile_shown = true;
+        }
+
+        if (this.missile_shown) {
+            const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
+            this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
+        }
+
+        console.log(this.m_pos[2][3], this.pos[2][3]);
+        
+        if (this.m_pos[2][3] < this.pos[2][3]) {
+            this.missile_shown = false;
+        }
+
+        const jet_transformation = Mat4.identity().times(this.pos).times(this.base_jet_transformation);
+
+        this.shapes.jet.draw(context, program_state, jet_transformation, this.materials.jet);
 
         program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
-        
-        this.shapes.jet_body.draw(context, program_state, jet_body_transformation, this.materials.jet);
-        this.shapes.wing.draw(context, program_state, left_wing_transformation, this.materials.jet);
-        this.shapes.wing.draw(context, program_state, right_wing_transformation, this.materials.jet);
-        this.shapes.wing.draw(context, program_state, rudder_transformation, this.materials.jet);
-        this.shapes.cockpit.draw(context, program_state, cockpit_transformation, this.materials.jet);
 
-        const left_canyon_transformation = Mat4.identity().times(Mat4.translation(20, 0, 0))
-                                                     .times(Mat4.scale(1, 10, 1000));
-        const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-20, 0, 0))
-                                                     .times(Mat4.scale(1, 10, 1000));
+        const left_canyon_transformation = Mat4.identity().times(Mat4.translation(this.canyon_width, 0, 0))
+                                                     .times(Mat4.scale(1, 15, 1000));
+        const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
+                                                     .times(Mat4.scale(1, 15, 1000));
 
         this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
         this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+
+        // this.update_state();
 
     }
 }
