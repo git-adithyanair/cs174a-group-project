@@ -11,12 +11,19 @@ export class Maverick extends Scene {
         // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
         super();
 
+        //constant for Grid_Patch
+        const row_operation_2 = (s, p) => vec3(-1, 5 * s - 1, Math.random()+Math.random());
+        const column_operation_2 = (t, p, s) => vec3(500 * t - 1, 5 * s - 1, Math.random()+Math.random());
+
         // At the beginning of our program, load one of each of these shape definitions onto the GPU.
         this.shapes = {
             jet_body: new defs.Capped_Cylinder(20, 20),
             wing: new defs.Triangle(),
             cockpit: new defs.Closed_Cone(20, 20),
             cube: new defs.Cube(),
+            canyonWall: new defs.Grid_Patch(7, 600, row_operation_2, column_operation_2),
+            uranium: new Shape_From_File("assets/uranium.obj"),
+            island: new defs.Regular_2D_Polygon(40, 40)
             jet: new Shape_From_File("assets/jet.obj"),
             missile: new Shape_From_File("assets/missile.obj")
         };
@@ -41,13 +48,17 @@ export class Maverick extends Scene {
                                           texture: new Texture("assets/missile.jpg")
                                       }
                                   ),
-            canyon: new Material(new defs.Phong_Shader(), 
+            canyon: new Material(new defs.Textured_Phong(),
                                   {
-                                      ambient: 1, 
-                                      diffusivity: 1, 
-                                      color: hex_color('#9a7b4f'), 
-                                      texture: new Texture("assets/canyon.jpeg", "LINEAR_MIPMAP_LINEAR")
-                                  }), 
+                                      ambient: 1,
+                                      diffusivity: 1,
+                                      // color: hex_color('#9a7b4f'),
+                                      texture: new Texture("assets/canyon.png", "LINEAR_MIPMAP_LINEAR")
+                                  }),
+            uranium: new Material(new defs.Phong_Shader(),
+                                      {ambient: 0.4, diffusivity: 0.6, color: hex_color('#e8dd13')}),
+            island: new Material(new defs.Phong_Shader(),
+                                      {ambient: 0.4, diffusivity: 0.6, color: hex_color('#79d181')}), 
         }
         
         this.initial_camera_location = Mat4.look_at(vec3(0, 12, -35), vec3(0, 0, 0), vec3(0, 1, 0));
@@ -92,7 +103,7 @@ export class Maverick extends Scene {
 
     make_control_panel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
-        this.key_triggered_button("Up", ["w"], 
+        this.key_triggered_button("Up", ["w"],
                                   () => {
                                       this.up = true;
                                   },
@@ -102,31 +113,31 @@ export class Maverick extends Scene {
                                   },
                                  );
         this.new_line();
-        this.key_triggered_button("Left", ["a"], 
-                                  () => { 
+        this.key_triggered_button("Left", ["a"],
+                                  () => {
                                       this.left = true;
                                   },
                                   undefined,
-                                  () => { 
+                                  () => {
                                       this.left = false;
                                   }
         );
         this.key_triggered_button("Right", ["d"],
-                                  () => { 
+                                  () => {
                                       this.right = true;
                                   },
                                   undefined,
-                                  () => { 
+                                  () => {
                                       this.right = false;
                                   }
         );
         this.new_line();
         this.key_triggered_button("Down", ["s"],
-                                  () => { 
+                                  () => {
                                       this.down = true;
                                   },
                                   undefined,
-                                  () => { 
+                                  () => {
                                       this.down = false;
                                   }
         );
@@ -169,11 +180,11 @@ export class Maverick extends Scene {
         // display():  Called once per frame of animation.
         // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
         if (!this.setup_complete) {
-            // this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
-            
+            this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
+
             // Define the global camera and projection matrices, which are stored in program_state.
             program_state.set_camera(this.initial_camera_location);
-            
+
             // The parameters of the Light are: position, color, size
             program_state.lights = [new Light(vec4(0, 5, 5, 1), color(1, 1, 1, 1), 100000)];
 
@@ -224,7 +235,7 @@ export class Maverick extends Scene {
             this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
             this.missile_shown = true;
         }
-
+        
         if (this.missile_shown) {
             const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
             this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
@@ -235,6 +246,31 @@ export class Maverick extends Scene {
         if (this.m_pos[2][3] < this.pos[2][3]) {
             this.missile_shown = false;
         }
+
+        program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
+
+        this.shapes.jet_body.draw(context, program_state, jet_body_transformation, this.materials.jet);
+        this.shapes.wing.draw(context, program_state, left_wing_transformation, this.materials.jet);
+        this.shapes.wing.draw(context, program_state, right_wing_transformation, this.materials.jet);
+        this.shapes.wing.draw(context, program_state, rudder_transformation, this.materials.jet);
+        this.shapes.cockpit.draw(context, program_state, cockpit_transformation, this.materials.jet);
+
+        const left_canyon_transformation = Mat4.identity().times(Mat4.rotation(Math.PI/2,0, 1, 0))
+                                                          .times(Mat4.translation(-470, 10, 4))
+                                                          .times(Mat4.scale(1, 3, 3));
+        const right_canyon_transformation = Mat4.identity().times(Mat4.rotation(Math.PI/2,0, 1, 0))
+                                                          .times(Mat4.translation(-470, 10, -11))
+                                                          .times(Mat4.scale(1, 3, 3));
+
+        const uranium = Mat4.identity().times(Mat4.scale(2, 2, 2))
+                                       .times(Mat4.rotation(Math.PI/2, 0, 1, 0))
+                                       .times(Mat4.translation(-300, 3, 0));
+
+
+        this.shapes.canyonWall.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
+        this.shapes.canyonWall.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+        // this.shapes.island.draw(context, program_state, island, this.materials.island);
+        this.shapes.uranium.draw(context, program_state, uranium, this.materials.uranium);
 
         const jet_transformation = Mat4.identity().times(this.pos).times(this.base_jet_transformation);
 
@@ -247,8 +283,8 @@ export class Maverick extends Scene {
         const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
                                                      .times(Mat4.scale(1, 15, 1000));
 
-        this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
-        this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+        // this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
+        // this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
 
         // this.update_state();
 
@@ -266,7 +302,7 @@ class Gouraud_Shader extends Shader {
 
     shared_glsl_code() {
         // ********* SHARED CODE, INCLUDED IN BOTH SHADERS *********
-        return ` 
+        return `
         precision mediump float;
         const int N_LIGHTS = ` + this.num_lights + `;
         uniform float ambient, diffusivity, specularity, smoothness;
@@ -279,20 +315,20 @@ class Gouraud_Shader extends Shader {
         // on to the next phase (fragment shader), then interpolated per-fragment, weighted by the
         // pixel fragment's proximity to each of the 3 vertices (barycentric interpolation).
         varying vec3 N, vertex_worldspace;
-        // ***** PHONG SHADING HAPPENS HERE: *****                                       
-        vec3 phong_model_lights( vec3 N, vec3 vertex_worldspace ){                                        
+        // ***** PHONG SHADING HAPPENS HERE: *****
+        vec3 phong_model_lights( vec3 N, vec3 vertex_worldspace ){
             // phong_model_lights():  Add up the lights' contributions.
             vec3 E = normalize( camera_center - vertex_worldspace );
             vec3 result = vec3( 0.0 );
             for(int i = 0; i < N_LIGHTS; i++){
-                // Lights store homogeneous coords - either a position or vector.  If w is 0, the 
-                // light will appear directional (uniform direction from all points), and we 
+                // Lights store homogeneous coords - either a position or vector.  If w is 0, the
+                // light will appear directional (uniform direction from all points), and we
                 // simply obtain a vector towards the light by directly using the stored value.
-                // Otherwise if w is 1 it will appear as a point light -- compute the vector to 
-                // the point light's location from the current surface point.  In either case, 
-                // fade (attenuate) the light as the vector needed to reach it gets longer.  
-                vec3 surface_to_light_vector = light_positions_or_vectors[i].xyz - 
-                                               light_positions_or_vectors[i].w * vertex_worldspace;                                             
+                // Otherwise if w is 1 it will appear as a point light -- compute the vector to
+                // the point light's location from the current surface point.  In either case,
+                // fade (attenuate) the light as the vector needed to reach it gets longer.
+                vec3 surface_to_light_vector = light_positions_or_vectors[i].xyz -
+                                               light_positions_or_vectors[i].w * vertex_worldspace;
                 float distance_to_light = length( surface_to_light_vector );
 
                 vec3 L = normalize( surface_to_light_vector );
@@ -302,7 +338,7 @@ class Gouraud_Shader extends Shader {
                 float diffuse  =      max( dot( N, L ), 0.0 );
                 float specular = pow( max( dot( N, H ), 0.0 ), smoothness );
                 float attenuation = 1.0 / (1.0 + light_attenuation_factors[i] * distance_to_light * distance_to_light );
-                
+
                 vec3 light_contribution = shape_color.xyz * light_colors[i].xyz * diffusivity * diffuse
                                                           + light_colors[i].xyz * specularity * specular;
                 result += attenuation * light_contribution;
@@ -314,13 +350,13 @@ class Gouraud_Shader extends Shader {
     vertex_glsl_code() {
         // ********* VERTEX SHADER *********
         return this.shared_glsl_code() + `
-            attribute vec3 position, normal;                            
+            attribute vec3 position, normal;
             // Position is expressed in object coordinates.
-            
+
             uniform mat4 model_transform;
             uniform mat4 projection_camera_model_transform;
-    
-            void main(){                                                                   
+
+            void main(){
                 // The vertex's final resting place (in NDCS):
                 gl_Position = projection_camera_model_transform * vec4( position, 1.0 );
                 // The final normal vector in screen space.
@@ -334,7 +370,7 @@ class Gouraud_Shader extends Shader {
         // A fragment is a pixel that's overlapped by the current triangle.
         // Fragments affect the final image or get discarded due to depth.
         return this.shared_glsl_code() + `
-            void main(){                                                           
+            void main(){
                 // Compute an initial (ambient) color:
                 gl_FragColor = vec4( shape_color.xyz * ambient, shape_color.w );
                 // Compute the final color with contributions from lights:
@@ -427,7 +463,7 @@ class Ring_Shader extends Shader {
         attribute vec3 position;
         uniform mat4 model_transform;
         uniform mat4 projection_camera_model_transform;
-        
+
         void main(){
           center = model_transform * vec4(0.0, 0.0, 0.0, 1.0);
           point_position = model_transform * vec4(position, 1.0);
