@@ -27,7 +27,7 @@ export class Group_Project extends Scene {
             water: new defs.Cube(),
             jet: new Shape_From_File("assets/jet.obj"),
             missile: new Shape_From_File("assets/missile.obj"),
-            canyonWall: new defs.Grid_Patch(8, 1400, row_operation_2, column_operation_2),
+            canyonWall: new defs.Grid_Patch(30, 1400, row_operation_2, column_operation_2),
             uranium: new Shape_From_File("assets/uranium.obj"),
             display: new defs.Square(),
             text: new Text_Line(50)
@@ -48,14 +48,6 @@ export class Group_Project extends Scene {
                                           texture: new Texture("assets/missile.jpg")
                                       }
                                  ),
-            // !!OLD (Adi's)!!
-            // canyon: new Material(new defs.Phong_Shader(), 
-            //                       {
-            //                           ambient: 1, 
-            //                           diffusivity: 1, 
-            //                           color: hex_color('#9a7b4f'), 
-            //                           texture: new Texture("assets/canyon.jpeg", "LINEAR_MIPMAP_LINEAR")
-            //                       }),
             canyon: new Material(new defs.Textured_Phong(),
                                   {
                                       ambient: 1,
@@ -69,7 +61,8 @@ export class Group_Project extends Scene {
                                   {
                                         color: hex_color("#000000"),
                                         ambient: 1,
-                                      texture: new Texture("assets/sea-water.png", "LINEAR_MIPMAP_LINEAR")
+                                        specularity: 0,
+                                        texture: new Texture("assets/sea-water.png", "LINEAR_MIPMAP_LINEAR")
                                   }),
             display: new Material(new defs.Phong_Shader(),
                                   {
@@ -100,7 +93,7 @@ export class Group_Project extends Scene {
         this.base_missile_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
                                                .times(Mat4.scale(2, 2, 2));
         
-        this.water_transformation = Mat4.identity().times(Mat4.scale(30, 1, 1000))
+        this.water_transformation = Mat4.identity().times(Mat4.scale(this.canyon_width + 1, 1, this.canyon_dist))
                                                    .times(Mat4.translation(0, this.water_start, 0))
                                                    .times(Mat4.rotation(Math.PI/2, 0, 0, 1));
 
@@ -108,7 +101,7 @@ export class Group_Project extends Scene {
 
     set_game() {
         
-        this.jet_speed = 20;
+        this.jet_speed = 200;
         this.pos = Mat4.identity();
 
         this.wing_tip = 8.5;
@@ -117,19 +110,22 @@ export class Group_Project extends Scene {
         this.missile_speed = 80;
         this.next_missile_time = 2;
         this.next_missile_probability = 0.25;
+        this.missile_render_dist = 150;
         this.missile_shown = false;
         this.has_collided = false;
         this.jet_hit = false;
         this.jet_hit_time = 0;
         this.jet_hit_time_delay = 0.5;
 
-        this.canyon_width = 30;
+        this.canyon_width = 20;
+        this.canyon_dist = 1200;
+        this.canyon_dsiplacement = 15;
         this.left_canyon_collision = false;
         this.right_canyon_collision = false;
 
-        this.water_start = -20; // one less than actual y pos so easier to see when jet touches water
+        this.water_start = -15; // one less than actual y pos so easier to see when jet touches water
 
-        this.max_canyon_height = 50;
+        this.max_canyon_height = 35;
         this.hit_max_height = false;
 
         this.up = false;
@@ -137,7 +133,7 @@ export class Group_Project extends Scene {
         this.left = false;
         this.right = false;
 
-        this.num_lives = 50;
+        this.num_lives = 500;
 
         this.game_won = false;
         this.game_lost = false;
@@ -251,7 +247,7 @@ export class Group_Project extends Scene {
         // display():  Called once per frame of animation.
         // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
         if (!this.setup_complete) {
-            // this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
+            this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
             
             // Define the global camera and projection matrices, which are stored in program_state.
             program_state.set_camera(this.initial_camera_location);
@@ -264,16 +260,15 @@ export class Group_Project extends Scene {
         const t = program_state.animation_time / 1000, dt = program_state.animation_delta_time / 1000;
 
         // The parameters of the Light are: position, color, size
-        program_state.lights = [new Light(vec4(this.pos[0][3], this.pos[1][3] + 10, this.pos[2][3], 1), color(1, 1, 1, 1), 100000)];
-
-        // !!NOT NEEDED!!    
-        // const left_canyon_transformation = Mat4.identity().times(Mat4.translation(this.canyon_width, 0, 0))
-        //                                                  .times(Mat4.scale(1, 15, 1000));
-        // const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
-        //                                              .times(Mat4.scale(1, 15, 1000));
-
-        // this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
-        // this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+        program_state.lights = [
+            new Light(vec4(this.pos[0][3], this.pos[1][3] + 10, this.pos[2][3] + 50, 1), color(1, 1, 1, 1), 100000),
+            new Light(vec4(0, 10, this.canyon_dist * (1/6), 1), color(1, 1, 1, 1), 1000),
+            new Light(vec4(0, 10, this.canyon_dist * (2/6), 1), color(1, 1, 1, 1), 1000),
+            new Light(vec4(0, 10, this.canyon_dist * (3/6), 1), color(1, 1, 1, 1), 1000),
+            new Light(vec4(0, 10, this.canyon_dist * (4/6), 1), color(1, 1, 1, 1), 1000),
+            new Light(vec4(0, 10, this.canyon_dist * (5/6), 1), color(1, 1, 1, 1), 1000),
+            new Light(vec4(0, 10, this.canyon_dist * (6/6), 1), color(1, 1, 1, 1), 1000),                               
+        ];
 
         if (this.game_won || this.game_lost) {
 
@@ -365,7 +360,7 @@ export class Group_Project extends Scene {
                 this.next_missile_time += 2;
                 const missile_x = Math.floor(Math.random() * 100) * (10 / 100) * (Math.random() > 0.5 ? 1 : -1);
                 const missile_y = Math.floor(Math.random() * 100) * (10 / 100) * (Math.random() > 0.5 ? 1 : -1);
-                this.m_pos = Mat4.identity().times(Mat4.translation(missile_x, missile_y, this.pos[2][3] + 120)); 
+                this.m_pos = Mat4.identity().times(Mat4.translation(missile_x, missile_y, this.pos[2][3] + this.missile_render_dist)); 
                 const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
                 this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
                 this.missile_shown = true;
@@ -382,20 +377,20 @@ export class Group_Project extends Scene {
                 this.missile_shown = false;
             }
     
-            if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
-                this.right_canyon_collision = true;
-                this.jet_hit = true;
-                this.jet_hit_time = t;
-                this.num_lives -= 0.25;
-            } else if ((this.wing_tip + this.pos[0][3]) >= this.canyon_width) {
-                this.left_canyon_collision = true;
-                this.jet_hit = true;
-                this.jet_hit_time = t;
-                this.num_lives -= 0.25;
-            } else {
-                this.left_canyon_collision = false;
-                this.right_canyon_collision = false;
-            }
+            // if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
+            //     this.right_canyon_collision = true;
+            //     this.jet_hit = true;
+            //     this.jet_hit_time = t;
+            //     this.num_lives -= 0.25;
+            // } else if ((this.wing_tip + this.pos[0][3] - 2) >= this.canyon_width) {
+            //     this.left_canyon_collision = true;
+            //     this.jet_hit = true;
+            //     this.jet_hit_time = t;
+            //     this.num_lives -= 0.25;
+            // } else {
+            //     this.left_canyon_collision = false;
+            //     this.right_canyon_collision = false;
+            // }
     
             if (this.has_collided) {
                 this.missile_shown = false;
@@ -405,18 +400,16 @@ export class Group_Project extends Scene {
                 this.num_lives -= 10;
             }
 
-            // hit water
-            if (this.pos[1][3] <= this.water_start) {
-                this.num_lives = 0
-            }
+            // if (this.pos[1][3] - 1 <= this.water_start) {
+            //     this.num_lives = 0
+            // }
 
-            // hit max height
-            if (this.pos[1][3] >= this.max_canyon_height) {
-                this.hit_max_height = true;
-            }
-            else {
-                this.hit_max_height = false;
-            }
+            // if (this.pos[1][3] >= this.max_canyon_height) {
+            //     this.hit_max_height = true;
+            // }
+            // else {
+            //     this.hit_max_height = false;
+            // }
 
             if (this.num_lives <= 0) {
                 this.game_lost = true;
@@ -432,23 +425,17 @@ export class Group_Project extends Scene {
             this.shapes.jet.draw(context, program_state, jet_transformation, this.materials.jet.override({color: jet_color}));
     
             program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
-            
-            // !!OLD (Adi's)!!    
-            // const left_canyon_transformation = Mat4.identity().times(Mat4.translation(this.canyon_width, 0, 0))
-            //                                              .times(Mat4.scale(1, 15, 1000));
-            // const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
-            //                                              .times(Mat4.scale(1, 15, 1000));
-    
-            // this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
-            // this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
 
             const left_canyon_transformation = Mat4.identity().times(Mat4.scale(1, 10, 1))
-                                                              .times(Mat4.translation(this.canyon_width, -10, 1000))
+                                                              .times(Mat4.translation(this.canyon_width, -10, this.canyon_dist - 15))
                                                               .times(Mat4.rotation(Math.PI/2,0, 1, 0));
             
             const right_canyon_transformation = Mat4.identity().times(Mat4.scale(1, 10, 1))
-                                                               .times(Mat4.translation(-this.canyon_width, -10, 1000))
-                                                               .times(Mat4.rotation(Math.PI/2,0, 1, 0));
+                                                               .times(Mat4.translation(-this.canyon_width, -10, -15))
+                                                               .times(Mat4.rotation(-Math.PI/2,0, 1, 0));
+
+            const end_canyon_transformation = Mat4.identity().times(Mat4.scale(1, 10, 1))
+                                                             .times(Mat4.translation(-this.canyon_width, -10, this.canyon_dist - 10));
             
             const uranium = Mat4.identity().times(Mat4.scale(2, 2, 2))
                                        .times(Mat4.rotation(Math.PI/2, 0, 1, 0))
@@ -459,6 +446,7 @@ export class Group_Project extends Scene {
             this.shapes.water.draw(context, program_state, this.water_transformation, this.materials.water);
             this.shapes.canyonWall.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
             this.shapes.canyonWall.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+            this.shapes.canyonWall.draw(context, program_state, end_canyon_transformation, this.materials.canyon);
             this.shapes.uranium.draw(context, program_state, uranium, this.materials.uranium);
 
         }
