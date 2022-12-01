@@ -1,6 +1,7 @@
 import {defs, tiny} from './examples/common.js';
 import {Shape_From_File} from './examples/obj-file-demo.js';
-import {Body} from './examples/collisions-demo.js'
+import {Body} from './examples/collisions-demo.js';
+import {Text_Line} from './examples/text-demo.js'
 
 const {
     Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene, Movement_Controls, Texture
@@ -18,7 +19,9 @@ export class Group_Project extends Scene {
             cockpit: new defs.Closed_Cone(20, 20),
             cube: new defs.Cube(),
             jet: new Shape_From_File("assets/jet.obj"),
-            missile: new Shape_From_File("assets/missile.obj")
+            missile: new Shape_From_File("assets/missile.obj"),
+            display: new defs.Square(),
+            text: new Text_Line(50)
         };
 
         // *** Materials
@@ -42,7 +45,23 @@ export class Group_Project extends Scene {
                                       diffusivity: 1, 
                                       color: hex_color('#9a7b4f'), 
                                       texture: new Texture("assets/canyon.jpeg", "LINEAR_MIPMAP_LINEAR")
-                                  }), 
+                                  }),
+            display: new Material(new defs.Phong_Shader(),
+                                  {
+                                      ambient: 0.8,
+                                      diffusivity: .3,
+                                      specularity: .5,
+                                      smoothness: 10,
+                                      color: hex_color('#98fb98'), 
+                                  }),
+            text: new Material(new defs.Textured_Phong(),
+                               {
+                                   ambient: 1,
+                                   diffusivity: 0,
+                                   specularity: 0,
+                                   texture: new Texture("assets/text.png")
+                               })
+            
         }
         
         this.initial_camera_location = Mat4.look_at(vec3(0, 12, -35), vec3(0, 0, 0), vec3(0, 1, 0));
@@ -54,6 +73,41 @@ export class Group_Project extends Scene {
         this.base_missile_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
                                                .times(Mat4.scale(2, 2, 2));
 
+        // this.jet_speed = 20;
+        // this.pos = Mat4.identity();
+
+        // this.wing_tip = 8.5;
+
+        // this.m_pos = Mat4.identity().times(Mat4.translation(0, 0, -1000));
+        // this.missile_speed = 80;
+        // this.next_missile_time = 2;
+        // this.next_missile_probability = 0.25;
+        // this.missile_shown = false;
+        // this.has_collided = false;
+        // this.jet_hit = false;
+        // this.jet_hit_time = 0;
+        // this.jet_hit_time_delay = 0.5;
+
+        // this.canyon_width = 30;
+        // this.left_canyon_collision = false;
+        // this.right_canyon_collision = false;
+
+        // this.up = false;
+        // this.down = false;
+        // this.left = false;
+        // this.right = false;
+
+        // this.num_lives = 50;
+
+        // this.game_won = false;
+        // this.game_lost = false;
+
+        this.set_game();
+
+    }
+
+    set_game() {
+        
         this.jet_speed = 20;
         this.pos = Mat4.identity();
 
@@ -80,6 +134,9 @@ export class Group_Project extends Scene {
 
         this.num_lives = 50;
 
+        this.game_won = false;
+        this.game_lost = false;
+        
     }
 
     make_control_panel() {
@@ -87,7 +144,7 @@ export class Group_Project extends Scene {
         this.control_panel.innerHTML += "Welcome to your mission! You have been tasked with destroying an unsactioned uranium plant which is located at the far end of this canyon. It is defended by tracking missiles! GET to the end, DESTROY the plant and SAVE the world!";
         this.new_line();
         this.new_line();
-        this.live_string(box => box.textContent = "Plane health: " + "|".repeat(this.num_lives));
+        this.live_string(box => box.textContent = this.num_lives ? "Plane health: " + "|".repeat(this.num_lives) : "Plane health: ");
         this.new_line();
         this.new_line();
         this.live_string(box => box.textContent = "Distance travelled: " + this.pos[2][3].toFixed(0) + "m");
@@ -129,6 +186,14 @@ export class Group_Project extends Scene {
                                   undefined,
                                   () => { 
                                       this.down = false;
+                                  }
+        );
+        this.new_line();
+        this.key_triggered_button("Restart", [" "],
+                                  () => { 
+                                      if (this.game_won || this.game_lost) {
+                                          this.set_game();
+                                      }
                                   }
         );
     }
@@ -189,95 +254,176 @@ export class Group_Project extends Scene {
             this.setup_complete = true;
         }
 
-        program_state.projection_transform = Mat4.perspective(
-            Math.PI / 4, context.width / context.height, .1, 1000);
+        program_state.projection_transform = Mat4.perspective(Math.PI / 4, context.width / context.height, .1, 1000);
 
         const t = program_state.animation_time / 1000, dt = program_state.animation_delta_time / 1000;
-
-        this.move_scene();
-
-        if (this.up) {
-            this.pos = this.pos.times(Mat4.translation(0, this.jet_speed * dt, 0));
-        }
-
-        if (this.down) {
-            this.pos = this.pos.times(Mat4.translation(0, -this.jet_speed * dt, 0));
-        }
-
-        if (this.left && !this.left_canyon_collision) {
-            this.pos = this.pos.times(Mat4.translation(this.jet_speed * dt, 0, 0));
-        }
-
-        if (this.right && !this.right_canyon_collision) {
-            this.pos = this.pos.times(Mat4.translation(-this.jet_speed * dt, 0, 0));
-        }
 
         // The parameters of the Light are: position, color, size
         program_state.lights = [new Light(vec4(this.pos[0][3], this.pos[1][3] + 10, this.pos[2][3], 1), color(1, 1, 1, 1), 100000)];
 
-        if (t > this.next_missile_time && Math.random() < this.next_missile_probability && !this.missile_shown) {
-            this.next_missile_time += 2;
-            const missile_x = Math.floor(Math.random() * 100) * (10 / 100) * (Math.random() > 0.5 ? 1 : -1);
-            const missile_y = Math.floor(Math.random() * 100) * (10 / 100) * (Math.random() > 0.5 ? 1 : -1);
-            this.m_pos = Mat4.identity().times(Mat4.translation(missile_x, missile_y, this.pos[2][3] + 120)); 
-            const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
-            this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
-            this.missile_shown = true;
-        }
-
-        if (this.missile_shown) {
-            const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
-            this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
-        }
-
-        this.has_collided = this.check_if_colliding();
-
-        if (this.m_pos[2][3] < this.pos[2][3] - 20 && !this.has_collided) {
-            this.missile_shown = false;
-        }
-
-        if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
-            this.right_canyon_collision = true;
-            this.jet_hit = true;
-            this.jet_hit_time = t;
-            this.num_lives -= 0.25;
-        } else if ((this.wing_tip + this.pos[0][3]) >= this.canyon_width) {
-            this.left_canyon_collision = true;
-            this.jet_hit = true;
-            this.jet_hit_time = t;
-            this.num_lives -= 0.25;
-        } else {
-            this.left_canyon_collision = false;
-            this.right_canyon_collision = false;
-        }
-
-        if (this.has_collided) {
-            this.missile_shown = false;
-            this.jet_hit = true;
-            this.jet_hit_time = t;
-            this.m_pos =  Mat4.identity().times(Mat4.translation(0, 0, -1000));
-            this.num_lives -= 10;
-        }
-
-        const jet_transformation = Mat4.identity().times(this.pos).times(this.base_jet_transformation);
-        let jet_color = hex_color("#746e6b");
-
-        if (this.jet_hit && t < this.jet_hit_time + this.jet_hit_time_delay) {
-            jet_color =hex_color("#d22b2b");
-        }
-
-        this.shapes.jet.draw(context, program_state, jet_transformation, this.materials.jet.override({color: jet_color}));
-
-        program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
-
         const left_canyon_transformation = Mat4.identity().times(Mat4.translation(this.canyon_width, 0, 0))
-                                                     .times(Mat4.scale(1, 15, 1000));
+                                                         .times(Mat4.scale(1, 15, 1000));
         const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
                                                      .times(Mat4.scale(1, 15, 1000));
 
         this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
         this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
 
+        if (this.game_won || this.game_lost) {
+
+            const display_transformation = Mat4.identity().times(this.pos).times(Mat4.scale(10, 8, 1))
+                                                          .times(Mat4.translation(0, 0.5, -10))
+                                                          .times(Mat4.rotation(Math.PI/4, 1, 0, 0));
+            
+            let display_color;
+            
+            if (this.game_won) {
+                display_color = hex_color("#98fb98");
+            } else if (this.game_lost) {
+                display_color = hex_color("#800000");
+            }
+
+            this.shapes.display.draw(context, program_state, display_transformation, this.materials.display.override({color: display_color}));
+            
+            if (this.game_won) {
+                
+                const text_1_transformation = Mat4.identity().times(this.pos)
+                                                             .times(Mat4.translation(6, 8, -11))
+                                                             .times(Mat4.rotation(Math.PI, 0, 1, 0));
+            
+                const text_2_transformation = Mat4.identity().times(this.pos)
+                                                             .times(Mat4.translation(8, 5.5, -11))
+                                                             .times(Mat4.rotation(Math.PI, 0, 1, 0))
+                                                             .times(Mat4.scale(0.3, 0.3, 0.3));
+    
+                const text_3_transformation = Mat4.identity().times(this.pos)
+                                                             .times(Mat4.translation(5.75, 3, -11))
+                                                             .times(Mat4.rotation(Math.PI, 0, 1, 0))
+                                                             .times(Mat4.scale(0.3, 0.3, 0.3));
+                
+                this.shapes.text.set_string("Game won!", context.context);
+                this.shapes.text.draw(context, program_state, text_1_transformation, this.materials.text);
+                this.shapes.text.set_string("You've destroyed the uranium deposit!", context.context);
+                this.shapes.text.draw(context, program_state, text_2_transformation, this.materials.text);
+                this.shapes.text.set_string("Press spacebar to restart...", context.context);
+                this.shapes.text.draw(context, program_state, text_3_transformation, this.materials.text);
+                
+            } else if (this.game_lost) {
+                
+                const text_1_transformation = Mat4.identity().times(this.pos)
+                                                             .times(Mat4.translation(6.5, 8, -11))
+                                                             .times(Mat4.rotation(Math.PI, 0, 1, 0));
+            
+                const text_2_transformation = Mat4.identity().times(this.pos)
+                                                             .times(Mat4.translation(6.5, 5.5, -11))
+                                                             .times(Mat4.rotation(Math.PI, 0, 1, 0))
+                                                             .times(Mat4.scale(0.3, 0.3, 0.3));
+    
+                const text_3_transformation = Mat4.identity().times(this.pos)
+                                                             .times(Mat4.translation(5.75, 3, -11))
+                                                             .times(Mat4.rotation(Math.PI, 0, 1, 0))
+                                                             .times(Mat4.scale(0.3, 0.3, 0.3));
+                
+                this.shapes.text.set_string("Game lost!", context.context);
+                this.shapes.text.draw(context, program_state, text_1_transformation, this.materials.text);
+                this.shapes.text.set_string("Your plane has been destroyed!", context.context);
+                this.shapes.text.draw(context, program_state, text_2_transformation, this.materials.text);
+                this.shapes.text.set_string("Press spacebar to restart...", context.context);
+                this.shapes.text.draw(context, program_state, text_3_transformation, this.materials.text);
+                
+            }
+
+            program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
+            
+        } else {
+
+            this.move_scene();
+
+            if (this.up) {
+                this.pos = this.pos.times(Mat4.translation(0, this.jet_speed * dt, 0));
+            }
+    
+            if (this.down) {
+                this.pos = this.pos.times(Mat4.translation(0, -this.jet_speed * dt, 0));
+            }
+    
+            if (this.left && !this.left_canyon_collision) {
+                this.pos = this.pos.times(Mat4.translation(this.jet_speed * dt, 0, 0));
+            }
+    
+            if (this.right && !this.right_canyon_collision) {
+                this.pos = this.pos.times(Mat4.translation(-this.jet_speed * dt, 0, 0));
+            }
+    
+            if (t > this.next_missile_time && Math.random() < this.next_missile_probability && !this.missile_shown) {
+                this.next_missile_time += 2;
+                const missile_x = Math.floor(Math.random() * 100) * (10 / 100) * (Math.random() > 0.5 ? 1 : -1);
+                const missile_y = Math.floor(Math.random() * 100) * (10 / 100) * (Math.random() > 0.5 ? 1 : -1);
+                this.m_pos = Mat4.identity().times(Mat4.translation(missile_x, missile_y, this.pos[2][3] + 120)); 
+                const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
+                this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
+                this.missile_shown = true;
+            }
+    
+            if (this.missile_shown) {
+                const missile_transformation = Mat4.identity().times(this.m_pos).times(this.base_missile_transformation);
+                this.shapes.missile.draw(context, program_state, missile_transformation, this.materials.missile);
+            }
+    
+            this.has_collided = this.check_if_colliding();
+    
+            if (this.m_pos[2][3] < this.pos[2][3] - 20 && !this.has_collided) {
+                this.missile_shown = false;
+            }
+    
+            if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
+                this.right_canyon_collision = true;
+                this.jet_hit = true;
+                this.jet_hit_time = t;
+                this.num_lives -= 0.25;
+            } else if ((this.wing_tip + this.pos[0][3]) >= this.canyon_width) {
+                this.left_canyon_collision = true;
+                this.jet_hit = true;
+                this.jet_hit_time = t;
+                this.num_lives -= 0.25;
+            } else {
+                this.left_canyon_collision = false;
+                this.right_canyon_collision = false;
+            }
+    
+            if (this.has_collided) {
+                this.missile_shown = false;
+                this.jet_hit = true;
+                this.jet_hit_time = t;
+                this.m_pos =  Mat4.identity().times(Mat4.translation(0, 0, -1000));
+                this.num_lives -= 10;
+            }
+
+            if (this.num_lives <= 0) {
+                this.game_lost = true;
+            }
+    
+            const jet_transformation = Mat4.identity().times(this.pos).times(this.base_jet_transformation);
+            let jet_color = hex_color("#746e6b");
+    
+            if (this.jet_hit && t < this.jet_hit_time + this.jet_hit_time_delay) {
+                jet_color = hex_color("#d22b2b");
+            }
+    
+            this.shapes.jet.draw(context, program_state, jet_transformation, this.materials.jet.override({color: jet_color}));
+    
+            program_state.set_camera(this.initial_camera_location.times(Mat4.inverse(this.pos)));
+    
+            const left_canyon_transformation = Mat4.identity().times(Mat4.translation(this.canyon_width, 0, 0))
+                                                         .times(Mat4.scale(1, 15, 1000));
+            const right_canyon_transformation = Mat4.identity().times(Mat4.translation(-this.canyon_width, 0, 0))
+                                                         .times(Mat4.scale(1, 15, 1000));
+    
+            this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
+            this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
+
+        }
+        
     }
 }
 
@@ -470,4 +616,3 @@ class Ring_Shader extends Shader {
         }`;
     }
 }
-
