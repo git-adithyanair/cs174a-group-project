@@ -43,8 +43,8 @@ export class Group_Project extends Scene {
                                   ),
             missile: new Material(new defs.Textured_Phong(), 
                                       {
-                                          ambient: 0.5,
-                                          color: hex_color('#00008b'),
+                                          ambient: 0,
+                                          color: hex_color('#000000'),
                                           texture: new Texture("assets/missile.jpg")
                                       }
                                  ),
@@ -88,6 +88,8 @@ export class Group_Project extends Scene {
                                })
             
         }
+
+        this.set_game();
         
         this.initial_camera_location = Mat4.look_at(vec3(0, 12, -35), vec3(0, 0, 0), vec3(0, 1, 0));
 
@@ -98,40 +100,9 @@ export class Group_Project extends Scene {
         this.base_missile_transformation = Mat4.rotation(-Math.PI/2, 0, 1, 0)
                                                .times(Mat4.scale(2, 2, 2));
         
-        this.water = Mat4.identity().times(Mat4.rotation(Math.PI/2, 0, 0, 1))
-                                    .times(Mat4.translation(-14, 0, 0))
-                                    .times(Mat4.scale(1, 25, 1000));
-
-        // this.jet_speed = 20;
-        // this.pos = Mat4.identity();
-
-        // this.wing_tip = 8.5;
-
-        // this.m_pos = Mat4.identity().times(Mat4.translation(0, 0, -1000));
-        // this.missile_speed = 80;
-        // this.next_missile_time = 2;
-        // this.next_missile_probability = 0.25;
-        // this.missile_shown = false;
-        // this.has_collided = false;
-        // this.jet_hit = false;
-        // this.jet_hit_time = 0;
-        // this.jet_hit_time_delay = 0.5;
-
-        // this.canyon_width = 30;
-        // this.left_canyon_collision = false;
-        // this.right_canyon_collision = false;
-
-        // this.up = false;
-        // this.down = false;
-        // this.left = false;
-        // this.right = false;
-
-        // this.num_lives = 50;
-
-        // this.game_won = false;
-        // this.game_lost = false;
-
-        this.set_game();
+        this.water_transformation = Mat4.identity().times(Mat4.scale(30, 1, 1000))
+                                                   .times(Mat4.translation(0, this.water_start, 0))
+                                                   .times(Mat4.rotation(Math.PI/2, 0, 0, 1));
 
     }
 
@@ -152,11 +123,11 @@ export class Group_Project extends Scene {
         this.jet_hit_time = 0;
         this.jet_hit_time_delay = 0.5;
 
-        this.canyon_width = 20;
+        this.canyon_width = 30;
         this.left_canyon_collision = false;
         this.right_canyon_collision = false;
 
-        this.water_start = -13; // one less than actual y pos so easier to see when jet touches water
+        this.water_start = -20; // one less than actual y pos so easier to see when jet touches water
 
         this.max_canyon_height = 50;
         this.hit_max_height = false;
@@ -471,22 +442,23 @@ export class Group_Project extends Scene {
             // this.shapes.cube.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
             // this.shapes.cube.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
 
-            const left_canyon_texture = Mat4.identity().times(Mat4.rotation(Math.PI/2,0, 1, 0))
-                                                          .times(Mat4.translation(-1000, -11, 20))
-                                                          .times(Mat4.scale(1, 3, 3));
-            const right_canyon_texture = Mat4.identity().times(Mat4.rotation(Math.PI/2,0, 1, 0))
-                                                          .times(Mat4.translation(-1000, -11, -26))
-                                                          .times(Mat4.scale(1, 3, 3));
+            const left_canyon_transformation = Mat4.identity().times(Mat4.scale(1, 10, 1))
+                                                              .times(Mat4.translation(this.canyon_width, -10, 1000))
+                                                              .times(Mat4.rotation(Math.PI/2,0, 1, 0));
+            
+            const right_canyon_transformation = Mat4.identity().times(Mat4.scale(1, 10, 1))
+                                                               .times(Mat4.translation(-this.canyon_width, -10, 1000))
+                                                               .times(Mat4.rotation(Math.PI/2,0, 1, 0));
+            
             const uranium = Mat4.identity().times(Mat4.scale(2, 2, 2))
                                        .times(Mat4.rotation(Math.PI/2, 0, 1, 0))
                                        .times(Mat4.translation(-475, 3, 0));
-            let rotation = Math.PI*dt/50;
-            this.water = this.water.times(Mat4.rotation(rotation, 0, 1, 0));
-
+            
+            this.water_transformation = this.water_transformation.times(Mat4.rotation(Math.PI*dt/50, 0, 1, 0));
         
-            this.shapes.water.draw(context, program_state, this.water, this.materials.water);
-            this.shapes.canyonWall.draw(context, program_state, left_canyon_texture, this.materials.canyon);
-            this.shapes.canyonWall.draw(context, program_state, right_canyon_texture, this.materials.canyon);
+            this.shapes.water.draw(context, program_state, this.water_transformation, this.materials.water);
+            this.shapes.canyonWall.draw(context, program_state, left_canyon_transformation, this.materials.canyon);
+            this.shapes.canyonWall.draw(context, program_state, right_canyon_transformation, this.materials.canyon);
             this.shapes.uranium.draw(context, program_state, uranium, this.materials.uranium);
 
         }
