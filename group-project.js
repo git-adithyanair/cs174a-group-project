@@ -156,6 +156,11 @@ export class Group_Project extends Scene {
         this.left_canyon_collision = false;
         this.right_canyon_collision = false;
 
+        this.water_start = -13; // one less than actual y pos so easier to see when jet touches water
+
+        this.max_canyon_height = 50;
+        this.hit_max_height = false;
+
         this.up = false;
         this.down = false;
         this.left = false;
@@ -369,7 +374,7 @@ export class Group_Project extends Scene {
 
             this.move_scene();
 
-            if (this.up) {
+            if (this.up && !this.hit_max_height) {
                 this.pos = this.pos.times(Mat4.translation(0, this.jet_speed * dt, 0));
             }
     
@@ -429,6 +434,19 @@ export class Group_Project extends Scene {
                 this.num_lives -= 10;
             }
 
+            // hit water
+            if (this.pos[1][3] <= this.water_start) {
+                this.num_lives = 0
+            }
+
+            // hit max height
+            if (this.pos[1][3] >= this.max_canyon_height) {
+                this.hit_max_height = true;
+            }
+            else {
+                this.hit_max_height = false;
+            }
+
             if (this.num_lives <= 0) {
                 this.game_lost = true;
             }
@@ -462,7 +480,7 @@ export class Group_Project extends Scene {
             const uranium = Mat4.identity().times(Mat4.scale(2, 2, 2))
                                        .times(Mat4.rotation(Math.PI/2, 0, 1, 0))
                                        .times(Mat4.translation(-475, 3, 0));
-            let rotation = Math.PI*dt/60;
+            let rotation = Math.PI*dt/50;
             this.water = this.water.times(Mat4.rotation(rotation, 0, 1, 0));
 
         
