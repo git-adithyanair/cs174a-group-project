@@ -51,8 +51,8 @@ export class Group_Project extends Scene {
             canyon: new Material(new defs.Textured_Phong(),
                                   {
                                       ambient: 1,
-                                      diffusivity: 1,
-                                      // color: hex_color('#9a7b4f'),
+                                      diffusivity: 0,
+                                      color: hex_color('#000000'),
                                       texture: new Texture("assets/canyon.png", "LINEAR_MIPMAP_LINEAR")
                                   }),
             uranium: new Material(new defs.Phong_Shader(),
@@ -66,7 +66,7 @@ export class Group_Project extends Scene {
                                   }),
             display: new Material(new defs.Phong_Shader(),
                                   {
-                                      ambient: 0.8,
+                                      ambient: 0.6,
                                       diffusivity: .3,
                                       specularity: .5,
                                       smoothness: 10,
@@ -101,7 +101,7 @@ export class Group_Project extends Scene {
 
     set_game() {
         
-        this.jet_speed = 200;
+        this.jet_speed = 30;
         this.pos = Mat4.identity();
 
         this.wing_tip = 8.5;
@@ -123,7 +123,7 @@ export class Group_Project extends Scene {
         this.left_canyon_collision = false;
         this.right_canyon_collision = false;
 
-        this.water_start = -15; // one less than actual y pos so easier to see when jet touches water
+        this.water_start = -15; 
 
         this.max_canyon_height = 35;
         this.hit_max_height = false;
@@ -133,7 +133,7 @@ export class Group_Project extends Scene {
         this.left = false;
         this.right = false;
 
-        this.num_lives = 500;
+        this.num_lives = 50;
 
         this.game_won = false;
         this.game_lost = false;
@@ -377,20 +377,20 @@ export class Group_Project extends Scene {
                 this.missile_shown = false;
             }
     
-            // if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
-            //     this.right_canyon_collision = true;
-            //     this.jet_hit = true;
-            //     this.jet_hit_time = t;
-            //     this.num_lives -= 0.25;
-            // } else if ((this.wing_tip + this.pos[0][3] - 2) >= this.canyon_width) {
-            //     this.left_canyon_collision = true;
-            //     this.jet_hit = true;
-            //     this.jet_hit_time = t;
-            //     this.num_lives -= 0.25;
-            // } else {
-            //     this.left_canyon_collision = false;
-            //     this.right_canyon_collision = false;
-            // }
+            if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
+                this.right_canyon_collision = true;
+                this.jet_hit = true;
+                this.jet_hit_time = t;
+                this.num_lives -= 0.25;
+            } else if ((this.wing_tip + this.pos[0][3] - 2) >= this.canyon_width) {
+                this.left_canyon_collision = true;
+                this.jet_hit = true;
+                this.jet_hit_time = t;
+                this.num_lives -= 0.25;
+            } else {
+                this.left_canyon_collision = false;
+                this.right_canyon_collision = false;
+            }
     
             if (this.has_collided) {
                 this.missile_shown = false;
@@ -400,17 +400,21 @@ export class Group_Project extends Scene {
                 this.num_lives -= 10;
             }
 
-            // if (this.pos[1][3] - 1 <= this.water_start) {
-            //     this.num_lives = 0
-            // }
+            if (this.pos[1][3] - 1 <= this.water_start) {
+                this.num_lives = 0
+            }
 
-            // if (this.pos[1][3] >= this.max_canyon_height) {
-            //     this.hit_max_height = true;
-            // }
-            // else {
-            //     this.hit_max_height = false;
-            // }
+            if (this.pos[1][3] >= this.max_canyon_height) {
+                this.hit_max_height = true;
+            }
+            else {
+                this.hit_max_height = false;
+            }
 
+            if (this.pos[2][3] >= this.canyon_dist - 50) {
+                this.game_won = true;
+            }
+            
             if (this.num_lives <= 0) {
                 this.game_lost = true;
             }
@@ -435,11 +439,12 @@ export class Group_Project extends Scene {
                                                                .times(Mat4.rotation(-Math.PI/2,0, 1, 0));
 
             const end_canyon_transformation = Mat4.identity().times(Mat4.scale(1, 10, 1))
-                                                             .times(Mat4.translation(-this.canyon_width, -10, this.canyon_dist - 10));
+                                                             .times(Mat4.translation(-this.canyon_width, -10, this.canyon_dist - 20));
             
             const uranium = Mat4.identity().times(Mat4.scale(2, 2, 2))
-                                       .times(Mat4.rotation(Math.PI/2, 0, 1, 0))
-                                       .times(Mat4.translation(-475, 3, 0));
+                                        .times(Mat4.translation(0, 0, 580))
+                                       .times(Mat4.rotation(Math.PI/2, 0, 1, 0));
+                                       
             
             this.water_transformation = this.water_transformation.times(Mat4.rotation(Math.PI*dt/50, 0, 1, 0));
         
