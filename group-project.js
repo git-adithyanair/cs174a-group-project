@@ -51,7 +51,7 @@ export class Group_Project extends Scene {
             canyon: new Material(new defs.Textured_Phong(),
                                   {
                                       ambient: 1,
-                                      diffusivity: 0,
+                                      specularity: 0.4,
                                       color: hex_color('#000000'),
                                       texture: new Texture("assets/canyon.png", "LINEAR_MIPMAP_LINEAR")
                                   }),
@@ -247,7 +247,7 @@ export class Group_Project extends Scene {
         // display():  Called once per frame of animation.
         // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
         if (!this.setup_complete) {
-            this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
+            // this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
             
             // Define the global camera and projection matrices, which are stored in program_state.
             program_state.set_camera(this.initial_camera_location);
@@ -377,7 +377,7 @@ export class Group_Project extends Scene {
                 this.missile_shown = false;
             }
     
-            if ((this.pos[0][3] - this.wing_tip) <= -this.canyon_width) {
+            if ((this.pos[0][3] - this.wing_tip + 2) <= -this.canyon_width) {
                 this.right_canyon_collision = true;
                 this.jet_hit = true;
                 this.jet_hit_time = t;
